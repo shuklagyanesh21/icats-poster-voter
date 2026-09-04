@@ -167,9 +167,19 @@
     fetch(window.CONFIG.ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
+      redirect: "follow",
       body: JSON.stringify({ name: name, picks: picks })
     })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        // A deployment set to anything but "Anyone" answers with a Google
+        // sign-in page instead of JSON. Say so, rather than blaming the wifi.
+        try {
+          return JSON.parse(text);
+        } catch (e) {
+          throw new Error("badresponse");
+        }
+      })
       .then(function (res) {
         if (!res.ok) return fail(res.error || "That ballot was not accepted.");
         localStorage.setItem(LS_KEY, JSON.stringify({ at: Date.now(), picks: picks }));
@@ -179,7 +189,11 @@
         }).join("");
         doneEl.showModal();
       })
-      .catch(function () {
+      .catch(function (e) {
+        if (e && e.message === "badresponse") {
+          return fail("The vote server is not accepting ballots. Please tell the " +
+                      "registration desk (the web app needs access set to Anyone).");
+        }
         fail("Could not reach the server. Move closer to the wifi and try again — your picks are saved.");
       });
   });

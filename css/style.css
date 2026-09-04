@@ -149,6 +149,9 @@ main{max-width:520px;margin:0 auto;padding:0 20px}
 .pills li:nth-child(2){background:var(--sage-100);color:var(--sage-800)}
 
 /* ---- confirm sheet ---- */
+/* .sheet--center sets display:flex, which outranks the UA rule
+   dialog:not([open]){display:none} and leaks the dialog into the page. */
+dialog:not([open]){display:none!important}
 .sheet{
   width:min(480px,100%);margin:auto auto 0;padding:26px 22px 28px;
   border:0;border-radius:var(--r-lg) var(--r-lg) 0 0;

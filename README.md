@@ -30,9 +30,42 @@ IDs must be `P01`–`P54` and must match the numbers printed on the boards.
 3. Reload the Sheet. A **Poster vote** menu appears → **Set up sheets**.
    Authorise when prompted.
 4. In Apps Script: **Deploy → New deployment → Web app**.
-   Execute as **Me**, access **Anyone**. Copy the `/exec` URL.
+   Execute as **Me**, Who has access **Anyone**. Copy the `/exec` URL.
 
 Set `POSTER_COUNT` in `Code.gs` if you don't have exactly 54.
+
+### Verify the deployment before anything else
+
+Open the `/exec` URL in a **private/incognito window**. You must see JSON:
+
+```json
+{"ok":true,"service":"icats-poster-vote","posters":54,"ballots":0}
+```
+
+If you get a **Google sign-in page** instead, access is set to *Anyone with a
+Google Account*, not *Anyone*. Every ballot will then fail in the browser with a
+CORS error and nothing reaches the Sheet. Fix it in **Deploy → Manage
+deployments → edit (pencil) → Who has access: Anyone → Deploy**.
+
+Apps Script serves the code from the deployment, not the editor. **Every time you
+edit `Code.gs` you must publish a new version**: Deploy → Manage deployments →
+pencil → Version: *New version* → Deploy. The `/exec` URL stays the same.
+
+### What is stored
+
+The **Votes** sheet has five columns and nothing more — the poster number is the
+only identifier the ballot needs, and titles and presenters already live in the
+abstract book, so duplicating them here would only go stale.
+
+| column | why |
+| --- | --- |
+| `timestamp` | ordering, and lets you cut off late ballots after the deadline |
+| `name` | the only duplicate-voter check there is; `tally()` flags repeats |
+| `first` | poster number, worth 3 points |
+| `second` | poster number, worth 2 points |
+| `third` | poster number, worth 1 point |
+
+Numbers are stored bare (`7`, not `P07`).
 
 ## 3. Publish
 

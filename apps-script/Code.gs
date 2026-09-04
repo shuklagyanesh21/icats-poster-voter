@@ -1,12 +1,18 @@
 /**
  * ICATS-FHM 2026 — poster vote backend.
- * Bound to a Google Sheet. Deploy as: Web app, execute as Me, access Anyone.
+ * Bound to a Google Sheet. Deploy as: Web app, "Execute as: Me",
+ * "Who has access: ANYONE" (not "Anyone with a Google Account" — that one
+ * bounces the browser to a sign-in page and every ballot fails with a CORS
+ * error before it ever reaches this script).
+ *
+ * Verify a deployment by opening the /exec URL in a private window. You must
+ * see JSON. If you see a Google sign-in page, the access setting is wrong.
  *
  * Voters identify themselves by typing their name as printed on their
  * conference ID card. Ballots are recorded as given and not checked against a
- * roster, so scan the Votes sheet for duplicate names before tallying.
+ * roster, so tally() flags duplicate names for you.
  *
- * Sheets used (setup() creates them):
+ * Sheets used (created on demand):
  *   Votes    timestamp | name | first | second | third
  *   Results  written by tally()
  */
@@ -15,25 +21,41 @@ var POSTER_COUNT = 54;   // must match data/posters.json
 var AWARDS = 8;
 var MAX_PER_GROUP = 2;   // cap on awards per research group; 0 disables
 
+var VOTES_HEADER = ['timestamp', 'name', 'first', 'second', 'third'];
+var RESULTS_HEADER = ['rank', 'poster', 'points', 'firsts', 'seconds', 'thirds'];
+
 // ---------------------------------------------------------------- setup
 
 function setup() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  sheet_(ss, 'Votes', ['timestamp', 'name', 'first', 'second', 'third']);
-  sheet_(ss, 'Results', ['rank', 'poster', 'points', 'firsts', 'seconds', 'thirds']);
+  votesSheet_();
+  sheet_('Results', RESULTS_HEADER);
   SpreadsheetApp.getUi().alert('Sheets ready. Deploy the web app to start collecting ballots.');
 }
 
-function sheet_(ss, name, header) {
+function sheet_(name, header) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s = ss.getSheetByName(name) || ss.insertSheet(name);
   if (s.getLastRow() === 0) s.appendRow(header);
   return s;
 }
 
+/** Created on demand so a forgotten setup() never silently drops a ballot. */
+function votesSheet_() {
+  return sheet_('Votes', VOTES_HEADER);
+}
+
 // ---------------------------------------------------------------- web app
 
+/** Health check. Open the /exec URL in a browser: this JSON means it is live. */
 function doGet() {
-  return json_({ ok: true, service: 'icats-poster-vote' });
+  var out = { ok: true, service: 'icats-poster-vote', posters: POSTER_COUNT };
+  try {
+    out.ballots = Math.max(votesSheet_().getLastRow() - 1, 0);
+  } catch (err) {
+    out.ok = false;
+    out.error = 'Script is not bound to a spreadsheet: ' + err;
+  }
+  return json_(out);
 }
 
 function doPost(e) {
@@ -45,6 +67,10 @@ function doPost(e) {
   }
 
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return json_({ ok: false, error: 'Empty request.' });
+    }
+
     var body = JSON.parse(e.postData.contents);
     var name = String(body.name || '').trim().replace(/\s+/g, ' ');
     var picks = body.picks || [];
@@ -54,23 +80,23 @@ function doPost(e) {
     }
     if (picks.length !== 3) return json_({ ok: false, error: 'Choose exactly three posters.' });
 
-    var valid = /^P\d{2}$/;
+    // Accept "P07", "07" or 7 from the client; store the bare number.
+    var nums = [];
     for (var i = 0; i < 3; i++) {
-      var n = parseInt(String(picks[i]).slice(1), 10);
-      if (!valid.test(picks[i]) || n < 1 || n > POSTER_COUNT) {
-        return json_({ ok: false, error: 'Unknown poster number.' });
-      }
+      var raw = String(picks[i]).trim().toUpperCase().replace(/^P/, '');
+      if (!/^\d{1,2}$/.test(raw)) return json_({ ok: false, error: 'Unknown poster number.' });
+      var n = parseInt(raw, 10);
+      if (!(n >= 1 && n <= POSTER_COUNT)) return json_({ ok: false, error: 'Unknown poster number.' });
+      nums.push(n);
     }
-    if (picks[0] === picks[1] || picks[1] === picks[2] || picks[0] === picks[2]) {
+    if (nums[0] === nums[1] || nums[1] === nums[2] || nums[0] === nums[2]) {
       return json_({ ok: false, error: 'Pick three different posters.' });
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    ss.getSheetByName('Votes').appendRow([new Date(), name, picks[0], picks[1], picks[2]]);
-
+    votesSheet_().appendRow([new Date(), name, nums[0], nums[1], nums[2]]);
     return json_({ ok: true });
   } catch (err) {
-    return json_({ ok: false, error: 'Could not record the ballot. Please try again.' });
+    return json_({ ok: false, error: 'Could not record the ballot. Please try again. (' + err + ')' });
   } finally {
     lock.releaseLock();
   }
@@ -86,7 +112,7 @@ function json_(obj) {
 /** 3 points for a 1st choice, 2 for a 2nd, 1 for a 3rd. Ties break on firsts, then seconds. */
 function tally() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var votes = ss.getSheetByName('Votes');
+  var votes = votesSheet_();
   var last = votes.getLastRow();
   if (last < 2) { SpreadsheetApp.getUi().alert('No ballots yet.'); return; }
 
@@ -104,7 +130,8 @@ function tally() {
   var score = {};
   rows.forEach(function (v) {
     [3, 2, 1].forEach(function (pts, i) {
-      var id = String(v[i]).trim().toUpperCase();
+      // Tolerate legacy "P07" rows alongside plain numbers.
+      var id = parseInt(String(v[i]).trim().toUpperCase().replace(/^P/, ''), 10);
       if (!id) return;
       score[id] = score[id] || { pts: 0, f: 0, s: 0, t: 0 };
       score[id].pts += pts;
@@ -113,13 +140,13 @@ function tally() {
   });
 
   var ranked = Object.keys(score).map(function (id) {
-    return [id, score[id].pts, score[id].f, score[id].s, score[id].t];
+    return [Number(id), score[id].pts, score[id].f, score[id].s, score[id].t];
   }).sort(function (a, b) {
     return (b[1] - a[1]) || (b[2] - a[2]) || (b[3] - a[3]);
   });
 
   var out = ranked.map(function (r, i) { return [i + 1, r[0], r[1], r[2], r[3], r[4]]; });
-  var sh = ss.getSheetByName('Results');
+  var sh = sheet_('Results', RESULTS_HEADER);
   sh.getRange(2, 1, Math.max(sh.getLastRow() - 1, 1), 6).clearContent();
   sh.getRange(2, 1, out.length, 6).setValues(out);
 
