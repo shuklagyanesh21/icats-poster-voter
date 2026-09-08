@@ -1,115 +1,334 @@
-# ICATS-FHM 2026 — best poster vote
+🗳️ ICATS Poster Voter
 
-Attendees type the numbers of their top 3 posters from a phone. 3-2-1 points, top 8 win.
-Static site on GitHub Pages, ballots stored in a Google Sheet via Apps Script.
-Voters identify themselves by typing their name as printed on their conference ID card.
-Names are recorded as given and **not** checked against a roster, so duplicates are
-possible — `tally()` warns about repeated names before you announce.
+A lightweight, mobile-friendly web app for collecting Best Poster Award votes at the International Conference for Advanced Technologies for Sustainable Food, Health, and Materials (ICATS).
 
-```
-index.html              ballot page
-config.js               endpoint URL + open/close switch
-css/style.css
-js/app.js
-data/posters.json       the 54 posters  ← replace this
-apps-script/Code.gs     paste into Apps Script
-tools/make-posters.html  CSV → posters.json
-tools/print-codes.html   unused — left over from the retired voting-code scheme
-```
+The application is intentionally simple: attendees open a voting link, select their top three posters, and submit their ballot. Votes are collected through a Google Apps Script backend and stored in Google Sheets for final validation and tallying.
 
-## 1. Poster list
+«Designed for a small conference audience (~120 attendees), not as a general-purpose election platform.»
 
-Export the abstract list as CSV with header `id,title,presenter,affiliation,theme`,
-open `tools/make-posters.html`, paste, download, and overwrite `data/posters.json`.
-IDs must be `P01`–`P54` and must match the numbers printed on the boards.
+---
 
-## 2. Sheet + backend
+✨ How it works
 
-1. New Google Sheet → Extensions → Apps Script.
-2. Delete the starter code, paste all of `apps-script/Code.gs`, save.
-3. Reload the Sheet. A **Poster vote** menu appears → **Set up sheets**.
-   Authorise when prompted.
-4. In Apps Script: **Deploy → New deployment → Web app**.
-   Execute as **Me**, Who has access **Anyone**. Copy the `/exec` URL.
+                ┌────────────────────┐
+                │   Attendee opens   │
+                │    voting link     │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                ┌────────────────────┐
+                │ Browse poster list │
+                │ & choose top 3     │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                ┌────────────────────┐
+                │   Submit ballot    │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                ┌────────────────────┐
+                │ Google Apps Script │
+                │     backend        │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                ┌────────────────────┐
+                │    Google Sheet    │
+                │   raw vote data    │
+                └─────────┬──────────┘
+                          │
+                   Voting closes
+                          │
+                          ▼
+                ┌────────────────────┐
+                │ Validate against   │
+                │ attendee registry  │
+                └─────────┬──────────┘
+                          │
+                          ▼
+                ┌────────────────────┐
+                │   Final tally &    │
+                │     winner 🏆      │
+                └────────────────────┘
 
-Set `POSTER_COUNT` in `Code.gs` if you don't have exactly 54.
+The frontend is hosted as a static site using GitHub Pages. No dedicated server is required.
 
-### Verify the deployment before anything else
+---
 
-Open the `/exec` URL in a **private/incognito window**. You must see JSON:
+🎯 Voting rules
 
-```json
-{"ok":true,"service":"icats-poster-vote","posters":54,"ballots":0}
-```
+Each attendee selects three different posters:
 
-If you get a **Google sign-in page** instead, access is set to *Anyone with a
-Google Account*, not *Anyone*. Every ballot will then fail in the browser with a
-CORS error and nothing reaches the Sheet. Fix it in **Deploy → Manage
-deployments → edit (pencil) → Who has access: Anyone → Deploy**.
+Rank| Meaning
+🥇 1st choice| Highest preference
+🥈 2nd choice| Second preference
+🥉 3rd choice| Third preference
 
-Apps Script serves the code from the deployment, not the editor. **Every time you
-edit `Code.gs` you must publish a new version**: Deploy → Manage deployments →
-pencil → Version: *New version* → Deploy. The `/exec` URL stays the same.
+The application prevents selecting the same poster multiple times within a ballot.
 
-### What is stored
+The exact scoring/tallying procedure is performed by the conference organizers after voting closes.
 
-The **Votes** sheet has five columns and nothing more — the poster number is the
-only identifier the ballot needs, and titles and presenters already live in the
-abstract book, so duplicating them here would only go stale.
+---
 
-| column | why |
-| --- | --- |
-| `timestamp` | ordering, and lets you cut off late ballots after the deadline |
-| `name` | the only duplicate-voter check there is; `tally()` flags repeats |
-| `first` | poster number, worth 3 points |
-| `second` | poster number, worth 2 points |
-| `third` | poster number, worth 1 point |
+🔐 A note on voting security
 
-Numbers are stored bare (`7`, not `P07`).
+This application is designed for conference poster voting, rather than a high-security election.
 
-## 3. Publish
+The voting endpoint is intentionally accessible from the public internet so attendees can submit votes without requiring a Google account or login.
 
-1. New GitHub repo, e.g. `icats-poster-vote`. Upload these files at the repo root.
-2. Paste the `/exec` URL into `ENDPOINT` in `config.js`, commit.
-3. Settings → Pages → Source **Deploy from a branch**, branch `main`, folder `/ (root)`.
-4. Live in ~1 minute at `https://USERNAME.github.io/icats-poster-vote/`.
+What the application does
 
-Test end to end before the conference: cast one ballot, confirm the row lands in
-**Votes** with the name and the three poster numbers.
+- Validates the structure of submitted ballots
+- Ensures exactly three poster choices are provided
+- Ensures poster IDs are valid
+- Prevents the same poster from being selected more than once in a ballot
+- Records submission time
+- Uses browser "localStorage" to discourage accidental repeat submissions
+- Stores submissions in a private Google Sheet
 
-## 4. QR
+What it does not attempt to do
 
-Print one large QR of the plain Pages URL for the hall entrance, and put smaller ones
-on the poster-session signage. There is nothing to hand out — voters just need the URL
-and their own name.
+The application does not provide cryptographic voter authentication or guarantee one-person-one-vote at the API level.
 
-## 5. On the day
+Instead, voter eligibility and duplicate submissions are reconciled after voting closes.
 
-- Open voting when the poster session is about half over.
-- Announce the deadline twice; walk the hall with the QR sign in the last 30 minutes.
-- To close early, set `OPEN: false` in `config.js` and commit, or set `CLOSES_AT`
-  in advance, e.g. `"2026-09-10T16:15:00+09:00"`.
+The raw submissions are compared against the official conference attendee/registration list. Duplicate or otherwise invalid submissions can then be excluded before the final tally.
 
-## 6. Results
+For a small conference of approximately 120 attendees, this provides a simple and practical workflow without introducing unnecessary authentication infrastructure.
 
-**Poster vote → Tally results.** Writes the full ranking to the **Results** sheet;
-top 8 win. Ties break on number of 1st choices, then 2nd choices.
+«Important: The Google Apps Script endpoint URL is public by design. It should therefore never be treated as a secret or credential.»
 
-The alert also lists any name that appears on more than one ballot. Those extra
-ballots **are** included in the ranking, so delete them in **Votes** and tally again
-before announcing.
+---
 
-Announce the rules beforehand, including the cap of two awards per research group —
-apply it by skipping down the Results list if a third poster from one group lands in
-the top 8.
+🛡️ Validation workflow
 
-## Notes
+After voting closes, organizers should reconcile the raw vote data against the registered attendee list.
 
-- Apps Script cannot answer a CORS preflight, so the POST uses `text/plain`. Don't
-  change that header.
-- `localStorage` blocks an accidental resubmit from the same phone, but nothing stops
-  a determined person voting again from another device or browser. One ballot per
-  person rests on the honour system plus the duplicate-name check at tally time.
-- Self-voting is no longer blocked automatically. Announce the rule instead, or check
-  the **Votes** sheet for presenters who ranked their own poster first.
-- No dependencies, no build step, no API keys in the client.
+Typical checks include:
+
+- Is the submitted name a registered attendee?
+- Has the attendee submitted more than one ballot?
+- Are all three poster choices valid?
+- Are the three choices distinct?
+- Are there unusual or clearly malformed submissions?
+
+The recommended approach is to preserve the original raw vote data and create a validated/final dataset rather than deleting submissions.
+
+Duplicate policy
+
+Before the event, organizers should decide how duplicate submissions will be handled.
+
+For example:
+
+«If multiple ballots are submitted under the same attendee name, the earliest valid ballot is counted and subsequent submissions are excluded.»
+
+The chosen rule should be applied consistently to all attendees.
+
+---
+
+🏗️ Architecture
+
+The project consists of two lightweight components.
+
+Frontend
+
+GitHub Pages
+    │
+    ├── HTML
+    ├── CSS
+    ├── JavaScript
+    └── conference poster data
+
+The frontend is static and does not contain access to the Google Sheet itself.
+
+Backend
+
+Google Apps Script
+        │
+        ▼
+   Google Sheets
+
+The Apps Script Web App receives ballot submissions and appends them to the voting spreadsheet.
+
+This keeps the Google Sheet private while allowing the public voting page to submit ballots.
+
+---
+
+📁 Repository structure
+
+.
+├── index.html              # Main voting interface
+├── config.js               # Frontend configuration
+├── styles.css              # UI styling
+│
+├── js/
+│   ├── app.js              # Voting interface logic
+│   └── ...
+│
+├── data/
+│   └── posters.json        # Poster information
+│
+├── apps-script/
+│   └── Code.gs             # Google Apps Script backend
+│
+├── tools/
+│   └── print-codes.html    # Utility for generating/printing materials
+│
+└── README.md
+
+«The exact structure may evolve as the conference implementation changes.»
+
+---
+
+🚀 Deployment
+
+1. Frontend
+
+The frontend can be deployed directly through GitHub Pages.
+
+No Node.js server or backend hosting is required.
+
+Configure the frontend with the deployed Google Apps Script Web App endpoint.
+
+2. Google Apps Script
+
+Create a Google Apps Script project and deploy it as a Web App.
+
+The backend should run under the organizer's Google account and write to the designated Google Sheet.
+
+The spreadsheet itself should not be made publicly editable.
+
+3. Configure posters
+
+Update the poster metadata used by the frontend:
+
+Poster ID
+Poster title
+Author(s)
+Affiliation
+
+The poster IDs used by the frontend must correspond to the IDs accepted by the Apps Script backend.
+
+4. Test before deployment
+
+Before the conference, test:
+
+- Valid ballot submission
+- Duplicate poster selection
+- Invalid poster IDs
+- Missing fields
+- Empty names
+- Very long names
+- Multiple submissions
+- Simultaneous submissions
+- Closed voting state
+- Google Sheet recording
+- Mobile browsers
+- Slow/unstable network conditions
+
+---
+
+📱 Designed for the conference floor
+
+The interface is intentionally optimized for attendees using their phones.
+
+The goal is:
+
+«Scan → Browse → Choose → Submit → Done.»
+
+No app installation is required.
+
+No account creation is required.
+
+No complicated registration process is required.
+
+---
+
+🔒 Privacy
+
+The voting backend records information required for ballot validation and tallying, including the submitted attendee name, selected posters, and submission timestamp.
+
+The Google Sheet containing raw votes should be accessible only to authorized conference organizers.
+
+The collected information should be handled according to the conference's applicable privacy/data-handling requirements and retained only as long as necessary.
+
+---
+
+🧪 Technology
+
+Built with deliberately boring technology:
+
+- HTML / CSS / JavaScript — frontend
+- GitHub Pages — static hosting
+- Google Apps Script — lightweight serverless backend
+- Google Sheets — vote storage
+
+No database server.
+No authentication service.
+No framework required.
+
+Because sometimes a conference voting system doesn't need Kubernetes. 😄
+
+---
+
+⚠️ Scope & limitations
+
+This project is designed for small-scale event voting.
+
+It is appropriate when:
+
+- the voter pool is relatively small
+- organizers can reconcile submissions against a registration list
+- the award is not a legally or financially consequential election
+- organizers control the final tally
+
+It should not be considered suitable for:
+
+- public elections
+- anonymous high-stakes elections
+- legally binding voting
+- elections requiring strong voter authentication
+- adversarial environments where participants have a strong incentive to manipulate results
+
+---
+
+🏆 Why this exists
+
+Conference poster sessions often have an awkward gap between:
+
+"Please vote for your favourite poster."
+
+and
+
+"Here's a complicated form requiring three logins and a 12-digit registration number."
+
+This project aims for something simpler.
+
+A participant should be able to walk around the poster session, decide which work impressed them, open a link on their phone, cast their three choices, and get back to the science.
+
+The organizers can deal with the boring part—validation and tallying—afterwards.
+
+---
+
+📄 License
+
+Add the project's license here if/when one is selected.
+
+---
+
+👤 Author
+
+Gyanesh Shukla
+
+Developed for poster-session voting at ICATS.
+
+---
+
+Status
+
+🟢 Conference-ready for small-scale deployment
+
+The system is intentionally lightweight and relies on post-voting reconciliation rather than attempting to implement a full authentication system.
+
+If you're deploying this for a new event, review the configuration, voting rules, privacy requirements, and duplicate-handling policy before opening the voting window.
