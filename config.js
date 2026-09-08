@@ -1,6 +1,6 @@
 // Paste the Apps Script Web App URL here after deploying (see README step 3).
 window.CONFIG = {
-  ENDPOINT: "https://script.google.com/macros/s/AKfycbyU8vKlWn8efX8V69Fh8UC_Cnwv52l3xZGKnrzdp2Cwi5Ai0fHfqiml7jULTPmg5QWU/exec",
+  ENDPOINT: "https://script.google.com/macros/s/AKfycbx4ZkzIfuey1bqTGnrgrbrpfMgK_nV1BaP6ix-A1XUwX9xII7oJbT0rdcP_GnxqRxlp/exec",
 
   // Set to false to close voting. The page then shows a closed notice.
   OPEN: true,
