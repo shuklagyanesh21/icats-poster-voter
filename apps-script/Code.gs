@@ -17,7 +17,7 @@
  *   Results  written by tally()
  */
 
-var POSTER_COUNT = 54;   // must match data/posters.json
+var POSTER_COUNT = 56;   // must match data/posters.json
 var AWARDS = 8;
 var MAX_PER_GROUP = 2;   // cap on awards per research group; 0 disables
 

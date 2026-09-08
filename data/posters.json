@@ -376,5 +376,19 @@
     "presenter": "Presenter Name 54",
     "affiliation": "Affiliation, Country",
     "theme": "Health & Biomedicine"
+  },
+  {
+    "id": "P55",
+    "title": "Poster 55 title — replace this text",
+    "presenter": "Presenter Name 55",
+    "affiliation": "Affiliation, Country",
+    "theme": "Advanced Materials"
+  },
+  {
+    "id": "P56",
+    "title": "Poster 56 title — replace this text",
+    "presenter": "Presenter Name 56",
+    "affiliation": "Affiliation, Country",
+    "theme": "Sustainability & Environment"
   }
 ]
